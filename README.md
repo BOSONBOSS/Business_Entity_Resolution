@@ -1,13 +1,4 @@
 # Comparative Machine Learning Approaches for Business Entity Resolution
-
-**Course:** CSE2032 — Machine Learning | **Semester:** 5th Semester, B.Tech CSE  
-**Academic Year:** 2026–27 | **Institution:** BML Munjal University  
-**Team Members:**
-- Ananshi Sharma (240377)
-- Aditya Nadar (240368)
-- Sumit Singh (240344)
-- Dhruv Sharma (240444)
-
 ---
 
 ## 📁 Repository Organization

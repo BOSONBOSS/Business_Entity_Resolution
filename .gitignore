@@ -1,0 +1,32 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Python Environment
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Large Datasets (Exceeds GitHub's 100 MB per-file limit)
+# The raw datasets are ~2.4 GB. Place them locally in student_resource/dataset/
+data/archives/
+*.zip
+student_resource/dataset/
+data/raw
+
+# IDE
+.vscode/
+.idea/

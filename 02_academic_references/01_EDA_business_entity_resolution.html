@@ -1,0 +1,158 @@
+# 🧹 Preprocessing Master Plan (v2.0)
+## Amazon ML Challenge 2026 — Business Entity Resolution
+
+> **2-Day Sprint Guide | For Beginners | Written by your AI Guide**
+> *(Updated with Hackathon-Winning Edge Case Fixes)*
+
+---
+
+## 📌 What is Preprocessing and Why Does It Matter?
+
+Think of it like this: You're comparing two messy handwritten name cards. Before you compare them, you wipe the smudges, correct obvious abbreviations, and standardize spellings. That's preprocessing.
+
+**Without preprocessing**, our ML model will miss obvious matches.  
+**With good preprocessing**, we can turn a "0% similar" match into a "95% similar" match — automatically.
+
+---
+
+## 📊 What We Know From the Data (EDA Findings)
+
+| Finding | What It Means For Us |
+|---|---|
+| Matches **NEVER cross country borders** | Free blocking key: only compare within same country |
+| **48%** of S1 records share the same business name | Name alone is not enough — address is the tiebreaker |
+| **168,967** empty addresses in Source 2 | Must handle missing addresses carefully |
+| **4%** of S2/S3 records have **website domains** | E.g., "dhaninvestments.com" instead of "Dhan Investments" |
+| Source 2 has **Hindi text** (Devanagari script) | String similarity fails here. Must rely on addresses and use a cross-script penalty flag. |
+| Addresses contain **ZIP codes & Building numbers** | Numbers are highly reliable. Extracting them is our golden tie-breaker. |
+| France appears **only in test**, never in training | Our code must be country-agnostic. |
+
+---
+
+## 🗂️ Step-by-Step Preprocessing Plan (The 10-Step Pipeline)
+
+### STEP 0: Setup & Loading (Don't Load Everything at Once!)
+The dataset is 2.35 GB. We process in chunks using Pandas `chunksize`.
+```python
+import pandas as pd
+
+# Process in chunks of 100,000 rows at a time:
+for chunk in pd.read_csv("train_source2.tsv", sep="\t", chunksize=100_000, 
+                          dtype=str, keep_default_na=False):
+    # process chunk here
+    pass
+```
+
+### STEP 1: Fix Fake "Null" Values
+Missing addresses aren't blank — they are written as "null", "n/a", "-", etc.
+```python
+PLACEHOLDER = {"null", "n/a", "na", "nan", "nil", "none", "-", ""}
+
+def clean_placeholder(text):
+    if str(text).strip().lower() in PLACEHOLDER:
+        return ""
+    return text
+```
+
+### STEP 2: Cross-Script Flagging (NEW!)
+Detect names in Hindi/Devanagari so the ML model knows *why* the name similarity is 0%.
+```python
+import re
+
+def is_non_latin(text):
+    """Returns True if text contains characters outside standard English/Latin alphabet."""
+    return bool(re.search(r'[^\x00-\x7F]', str(text)))
+```
+
+### STEP 3: Address Number Extraction (NEW!)
+Extract Building Numbers and Postal Codes from raw addresses. These are our golden tokens.
+```python
+def extract_numbers(text):
+    """Grabs all digit sequences (ZIP codes, building numbers)."""
+    return " ".join(re.findall(r'\b\d+\b', str(text)))
+```
+
+### STEP 4: Handle Non-Latin Scripts (Unicode Normalization)
+Remove accents from French/European characters (e.g., 'Café' → 'Cafe').
+```python
+import unicodedata
+
+def normalize_unicode(text):
+    normalized = unicodedata.normalize("NFKD", str(text))
+    return "".join(c for c in normalized if not unicodedata.combining(c))
+```
+
+### STEP 5: Core String Normalization
+Lowercase, remove punctuation (replace with space), collapse multiple spaces, strip whitespace.
+```python
+def normalize_string(text):
+    text = text.lower()
+    text = re.sub(r"[^\w\s]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+```
+
+### STEP 6: Handle Website Domains in Names
+Extract the actual business name from URL-like entries (`dhaninvestments.com` → `dhaninvestments`).
+
+### STEP 7: Strip Corporate Suffixes
+Remove "Inc", "Corp", "Pvt", "Ltd" to create a secondary "core name" column.
+```python
+LEGAL_SUFFIXES = {"inc", "corp", "ltd", "llc", "pvt", "private", "limited", "co"}
+```
+
+### STEP 8: Address Abbreviation Expansion
+Map abbreviations to full forms (ONLY applied to addresses, not names).
+```python
+ADDRESS_ABBREVS = {" rd ": " road ", " st ": " street ", " ave ": " avenue "}
+```
+
+### STEP 9: Smart Tokenization & Trigrams (UPDATED!)
+Create Python `set()` objects for subset matching. **We restrict trigrams to NAMES ONLY** to prevent memory explosion.
+```python
+def get_tokens(text):
+    """Return a set of words for fast intersection matching."""
+    return set(text.lower().split())
+
+def get_trigrams(text):
+    """3-char chunks for fuzzy matching (ONLY apply to names)."""
+    clean = re.sub(r"[^a-z0-9]", "", text.lower())
+    return {clean[i:i+3] for i in range(len(clean)-2)} if len(clean) >= 3 else {clean}
+```
+
+---
+
+## 📋 What Each Cleaned Column Will Look Like
+
+For every record, after preprocessing, we will have these new columns:
+
+| New Column | Example | Purpose |
+|---|---|---|
+| `clean_name` | `"mcdonalds"` | Normalized business name |
+| `clean_name_no_suffix` | `"mcdonalds"` (suffix removed) | For TF-IDF matching |
+| `clean_address` | `"123 main street new york"` | Normalized address |
+| `address_numbers` | `"123 10001"` | **Highly reliable tie-breaker** |
+| `name_tokens` | `{"mcdonalds"}` | For Jaccard similarity & Subset checks |
+| `name_trigrams` | `{"mcd", "cdo", ...}` | For fuzzy matching (Typos) |
+| `is_non_latin` | `False` | **Flag to ignore name mismatch** |
+| `is_domain` | `False` | Flag for website-name records |
+
+---
+
+## 🗓️ 2-Day Sprint Timeline
+
+### TODAY (Hours 1-4)
+- [ ] Initialize Jupyter Notebook and write preprocessing script
+- [ ] Run preprocessing script on a **sample** (50,000 rows) to verify it works
+- [ ] Run preprocessing on the **full dataset** (save cleaned files in chunks)
+
+### TODAY (Hours 4-8)
+- [ ] Begin blocking strategy (TF-IDF nearest neighbors by country + Rare Token Index)
+
+### TOMORROW (Hours 1-6)
+- [ ] Build feature engineering (similarity scores for candidate pairs)
+- [ ] Train XGBoost/LightGBM model on labeled training pairs
+- [ ] Generate `matching_results.tsv` and `candidate_pairs.tsv`
+
+### TOMORROW (Hours 6-8)
+- [ ] Validate output with the provided `validate_submission.py` script
+- [ ] Submit to the portal!

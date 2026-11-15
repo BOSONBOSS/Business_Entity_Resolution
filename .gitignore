@@ -30,3 +30,7 @@ data/raw
 # IDE
 .vscode/
 .idea/
+
+# Raw dataset folder (2.4 GB - do not push)
+dataset/
+dataset.zip
